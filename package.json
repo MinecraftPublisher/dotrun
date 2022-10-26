@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "mkdir storage && mkdir storage/posts && mkdir storage/users && node main.js server"
+    "start": "node main.js server"
   },
   "keywords": [],
   "author": "",
