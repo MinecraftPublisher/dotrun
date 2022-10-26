@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>dotrun</title>
+    <link rel="shortcut icon" href="/dot.png">
+    <link rel="apple-touch-icon" href="/dot.png">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<body>
+    <h1>run</h1>
+    <span>a self-hosted content board with no restrictions, no 4chan ripoff intended :) - <span class="postcount">loading...</span></span>
+    <div class="website"></div>
+    <br>
+    <div class="endpoints"></div>
+    <br><br><br>
+    <script>
+        const api = ((path, get, data, callback, ...rest) => {
+            if (get) {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', path, true);
+                xhr.onreadystatechange = () => {
+                    if (xhr.readyState === 4) {
+                        callback(xhr.status, xhr.responseText, ...rest)
+                    }
+                }
+                xhr.send();
+            } else {
+                const xhr = new XMLHttpRequest()
+                xhr.open('POST', path, true)
+                xhr.onreadystatechange = () => {
+                    if (xhr.readyState === 4) {
+                        callback(xhr.status, xhr.responseText, ...rest)
+                    }
+                }
+                xhr.send(data)
+            }
+        })
+
+        const endpoints = (() => {
+            const urls = [
+                'https://854b-130-255-192-122.eu.ngrok.io/',
+                'https://dotrun.pagekite.me/',
+                'https://discretion-nelson-asylum-americas.trycloudflare.com/',
+                'https://dotrun.us-1.sharedwithexpose.com/',
+                'https://quiet-catfish-98.telebit.io/',
+                'https://f70cb16a90d7b936583d3ee8bad57cf3.loophole.site/'
+            ]
+            if(window.location.href.includes('localhost')) urls.push('http://localhost/')
+            let result = new Array(urls.length).fill('')
+            for (let i = 0; i < urls.length; i++) {
+                const timestamp = +new Date()
+                fetch(urls[i] + 'ping')
+                    .then(res => res.text())
+                    .then(text => {
+                        if (text === 'pong!') {
+                            result[i] = `<li>🟢 ${Math.floor((+new Date() - timestamp) / 1)}ms - <a href="${urls[i]}">${urls[i]}</a></li>`
+                        } else {
+                            result[i] = `<li>🔴 ${Math.floor((+new Date() - timestamp) / 1)}ms - <a href="${urls[i]}">${urls[i]}</a></li>`
+                        }
+                    }).catch(() => {
+                        result[i] = `<li>🔴 ${Math.floor((+new Date() - timestamp) / 1)}ms - <a href="${urls[i]}">${urls[i]}</a></li>`
+                    })
+            }
+
+            const c = setInterval(() => {
+                if (result.filter(e => e === '').length === 0) {
+                    document.querySelector('.endpoints').innerHTML = `<h2>dotrun endpoints</h2>
+    <span>i recommend saving atleast two of the endpoint urls so you can be up-to-date :)</span>
+    <ul>${result.join('')}</ul>`
+                    clearInterval(c)
+                    posts()
+                }
+            }, 100)
+        })
+
+        const runEndpoints = (() => {
+			endpoints()
+        	setInterval(endpoints, 5000)
+		}) 
+
+        const website = document.querySelector('.website')
+
+        const timestampToRelativeTime = (timestamp) => {
+            const date = new Date(timestamp)
+            const now = new Date()
+            const diff = now - date
+            const day = 1000 * 60 * 60 * 24
+            const hour = 1000 * 60 * 60
+            const minute = 1000 * 60
+            const second = 1000
+            if (diff < second) {
+                return 'now'
+            } else if (diff < minute) {
+                return Math.floor(diff / second) + ' seconds ago'
+            } else if (diff < hour) {
+                return Math.floor(diff / minute) + ' minutes ago'
+            } else if (diff < day) {
+                return Math.floor(diff / hour) + ' hours ago'
+            } else {
+                return Math.floor(diff / day) + ' days ago'
+            }
+        }
+
+        const loadPost = ((id) => {
+            api('/post/' + id, true, null, (status, data) => {
+                if (status === 200) {
+                    const post = JSON.parse(data)
+                    loadMain(id, (subs => {
+                        website.innerHTML = `<h3>${post.title}</h3>
+                            <span class="timestamp-author-${post.id}">by <span class="author ${post.author === 'martia' ? 'gold' : ''}">${post.author}</span>, posted around ${timestampToRelativeTime(parseInt(post.timestamp))}</span>
+                            <div class="psot psot-${post.id}">
+                                ${post.body.replaceAll('\n', '<br>').replaceAll(' ', '&nbsp;')}
+                            </div>
+                            <span>Chain posts:</span>
+                            <div class="sub sub-${post.id}">
+                                ${subs}
+                            </div>
+                            <a href="#" onclick="make('${post.id}')">reply to this post</a><br>
+                            <br><br>
+                            <a href="#" onclick="mainMenu()">back</a>`
+                        const i = setInterval(() => {
+                            api('/post/' + id, true, null, (status, data) => {
+                                if (status === 200) {
+                                    try {
+                                        clearInterval(i)
+                                    } catch {
+                                        const post = JSON.parse(data)
+                                        const timestampAuthor = document.querySelector(`.timestamp-author-${post.id}`)
+                                        timestampAuthor.innerHTML = `by <span class="author">${post.author}</span>, posted around ${timestampToRelativeTime(parseInt(post.timestamp))}`
+                                        const postBody = document.querySelector(`.psot-${post.id}`)
+                                        postBody.innerHTML = post.body
+                                        const sub = document.querySelector(`.sub-${post.id}`)
+                                        sub.innerHTML = subs
+                                    }
+                                }
+                            })
+                        }, 1000)
+                    }), post.id)
+                } else {
+                    website.innerHTML = 'Error loading post: ' + status + ' - ' + data
+                }
+            })
+        })
+
+        const loadMain = ((id = -1, fn = (() => { }), self = -1) => {
+            api('/filter/' + id, true, null, (status, data, fn) => {
+                const posts = JSON.parse(data)
+                let html = ''
+                for (let post of posts) {
+                    html += `${'&nbsp&nbsp'}<a class="${post.author === 'martia' ? 'gold' : ''}" href="#" content="Preview: ${post.body.substring(0, 50)}${post.body.length !== post.body.substring(0, 50).length ? '...' : ''}" onclick="loadPost('${post.id}')">${post.author}: ${post.title}</a><br>`
+                }
+                if (html === '') html = '&nbsp&nbsp' + 'no shit 💀'
+                fn(html)
+            }, fn)
+        })
+
+        const make = ((parent) => {
+            const popup = document.createElement('div')
+            popup.className = 'popup'
+            popup.innerHTML = `<span style="margin-bottom: 0.8rem; margin-top: 0; display: block;">New post</span>
+                <input type="text" placeholder="username" id="username" required><br>
+                <input type="password" placeholder="password" id="password" required><br>
+                <hr>
+                <input type="text" placeholder="title" id="title"><br>
+                <textarea placeholder="body" id="body"></textarea><br>
+                <button onclick="submit('${parent}')">sned</button>
+                <button onclick="website.removeChild(document.querySelector('.popup'))">close</button>
+                <p style="color: white;">If you want to remain anonymous, Use 'anon' as username and whatever you like as password. Enjoy. WARNING: Posts must comply with replit's TOS, until we move to an independent platform.</p>`
+            website.appendChild(popup)
+            setTimeout(() => {
+                let bokus = false
+                popup.onclick = () => {
+                    bokus = true
+                }
+                window.onclick = () => {
+                    setTimeout(() => {
+                        if (!bokus) website.removeChild(popup)
+                        else bokus = false
+                    }, 10)
+                }
+            }, 500)
+        })
+
+        const register = ((parent) => {
+            const popup = document.createElement('div')
+            popup.className = 'popup'
+            popup.id = 'balls'
+            popup.innerHTML = `<span style="margin-bottom: 0.8rem; margin-top: 0; display: block;">New account (ratelimit bypassin'?)</span>
+                <br>
+                <input type="text" placeholder="username" id="username" required><br>
+                <input type="password" placeholder="password" id="password" required><br>
+                <br>
+                <span>you can only use letters, numbers and underscores.</span><br>
+                <button onclick="account('${parent}')">register</button>
+                <button onclick="website.removeChild(document.querySelector('.popup'))">close</button>`
+            website.appendChild(popup)
+            setTimeout(() => {
+                let bokus = false
+                popup.onclick = () => {
+                    bokus = true
+                }
+                window.onclick = () => {
+                    setTimeout(() => {
+                        if (!bokus) website.removeChild(popup)
+                        else bokus = false
+                    }, 10)
+                }
+            }, 500)
+        })
+
+        const submit = ((parent) => {
+            const popup = document.querySelector('.popup')
+            const username = document.querySelector('#username').value
+            const password = document.querySelector('#password').value
+            const title = document.querySelector('#title').value
+            const body = document.querySelector('#body').value
+            api('/post/' + username + '/' + password + '/' + parent + '/' + title, false, body, (status, data) => {
+                if (status === 200) {
+                    loadPost(JSON.parse(data).message)
+                    website.removeChild(popup)
+                } else if (status === 420) {
+                    popup.append('Ratelimit error: ' + data)
+                } else {
+                    popup.append(data)
+                }
+            })
+        })
+
+        const account = ((parent) => {
+            const popup = document.querySelector('#balls')
+            const username = document.querySelector('#username').value
+            const password = document.querySelector('#password').value
+            api('/register/' + username + '/' + password, false, null, (status, data) => {
+                if (status === 200) {
+                    website.removeChild(popup)
+                    alert('Welcome to dotrun!')
+                } else {
+                    if (document.querySelectorAll('._error').length === 0) popup.append('<span class="_error" style="color: red;">' + data + '</span>')
+                    else document.querySelector('._error').innerHTML = data
+                }
+            })
+        })
+
+        const posts = (() => {
+            fetch('/posts').then(res => res.text()).then(data => {
+                document.querySelector('.postcount').innerHTML = 'total posts: ' + data
+            })
+        })
+
+        const encode = ((text) => {
+            return text.replace(/[\u00A0-\u9999<>\&]/g, function (i) {
+                return '&#' + i.charCodeAt(0) + ';'
+            });
+        })
+
+        const mainMenu = (() => {
+            loadMain(-1, (data) => website.innerHTML = `<h3>posts:</h3>${data}<br>
+<a href="#" onclick="make('-1')">post something</a><br>
+<a href="#" onclick="register()">make an account</a>`)
+            window.onclick = null
+        })
+
+		posts()
+        mainMenu()
+    </script>
+    <style>
+        * {
+            margin: 0.5rem;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        div.website {
+            margin-left: 0;
+        }
+
+        div.popup {
+            overflow: scroll;
+            border-radius: 5px;
+            box-shadow: 0 0 20px rgb(255, 174, 174);
+            width: 30rem;
+            height: 25rem;
+            position: fixed;
+            top: calc(50% - 12rem);
+            left: calc(50% - 17rem);
+            padding: 1rem;
+            background-color: rgb(255, 154, 154);
+            z-index: 12;
+            max-width: 80vw;
+        }
+
+        div.popup span {
+            color: white;
+        }
+
+        input,
+        textarea {
+            background-color: rgb(37, 37, 37);
+            color: rgb(255, 58, 150) !important;
+            border: none;
+            padding: 0.5rem;
+            border-radius: 5px;
+            margin: 0.1rem;
+            width: 10rem;
+            outline: none;
+        }
+
+        @keyframes pulse {
+            from {
+                color: rgb(255, 207, 130) !important;
+                text-shadow: 0 0 5px rgb(255, 207, 130);
+            }
+
+            50% {
+                color: rgb(255, 221, 167) !important;
+                text-shadow: 0 0 10px rgb(255, 207, 130);
+            }
+
+            to {
+                color: rgb(255, 207, 130) !important;
+                text-shadow: 0 0 5px rgb(255, 207, 130);
+            }
+        }
+
+        .gold {
+            color: rgb(255, 207, 130) !important;
+            animation: pulse 1s infinite;
+        }
+
+        hr {
+            border: rgb(255, 255, 255) solid 0.1rem;
+            border-radius: 5px;
+            margin-left: 0;
+            margin-right: 0;
+        }
+
+        textarea {
+            width: 96%;
+            height: 6.5rem;
+            resize: vertical;
+        }
+
+        button {
+            background-color: rgb(0, 0, 0);
+            color: white;
+            border: none;
+            padding: 0.5rem;
+            border-radius: 5px;
+            margin: 0.1rem;
+            width: 7rem;
+            outline: none;
+            transition: background-color 0.2s ease-in-out;
+        }
+
+        button:hover {
+            background-color: rgb(255, 58, 150);
+        }
+
+        div.psot {
+            word-wrap: break-word;
+            margin: 2rem;
+            min-height: 6rem;
+            background-color: rgb(255 174 174);
+            box-shadow: 0 0 20px rgb(255, 174, 174);
+            color: white;
+            border-radius: 5px;
+            padding: 1rem;
+        }
+
+        span.author {
+            margin: 0;
+            color: rgb(255, 159, 69);
+        }
+
+        a {
+            padding: 0.2rem;
+            color: rgb(58, 183, 255);
+            text-decoration: none;
+            outline: none;
+            position: relative;
+        }
+
+        @keyframes unfade {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes fade {
+            from {
+                opacity: 1;
+            }
+
+            to {
+                opacity: 0;
+            }
+        }
+
+        a[content]::before {
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+            position: absolute;
+            top: 1.5rem;
+            left: 5rem;
+            z-index: 5;
+            background-color: rgb(255 174 174);
+            color: white !important;
+            padding: 0.5rem;
+            box-shadow: 0 0 20px rgb(255 174 174);
+            border: 1px solid rgb(255, 174, 174);
+            color: white;
+            color: black;
+            border-radius: 5px;
+            width: 0;
+            height: 0;
+            font-size: 0.9rem;
+            word-wrap: break-word;
+            overflow: scroll;
+        }
+
+        a[content]:hover::before {
+            animation: unfade 0.2s forwards;
+            animation-delay: 0.8s;
+            content: attr(content);
+            transition: opacity 0.2s ease-in-out;
+            width: 7rem;
+            height: 7rem;
+        }
+
+        a:focus {
+            color: rgb(255, 255, 255);
+            background-color: rgb(255, 58, 150);
+        }
+
+        a:hover {
+            color: rgb(255, 255, 255);
+            background-color: rgb(58, 183, 255);
+        }
+
+        body {
+            max-width: 60rem;
+            margin: auto;
+        }
+
+        div.website {
+            margin: 1.2rem;
+            margin-top: 2rem;
+            border: 1px solid rgb(255, 255, 255);
+            border-radius: 5px;
+            padding: 1rem;
+            min-height: 30rem;
+            background-color: rgb(255, 255, 255);
+            box-shadow: 0 0 5px rgb(255, 255, 255);
+        }
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: rgb(37, 37, 37);
+                color: rgb(255, 58, 150);
+            }
+
+            div.website {
+                background-color: rgb(37, 37, 37);
+                color: rgb(255, 58, 150);
+                box-shadow: 0 0 20px rgb(255, 255, 255);
+            }
+
+            div.psot {
+                background-color: rgb(46, 46, 46);
+                color: rgb(255, 58, 150);
+                box-shadow: 0 0 20px rgb(46, 46, 46);
+            }
+
+            a[content]::before {
+                background-color: rgb(46, 46, 46);
+                color: rgb(255, 58, 150);
+                box-shadow: 0 0 20px rgb(46, 46, 46);
+            }
+        }
+    </style>
+    <style>
+        @font-face {
+            font-family: "Cascadia Code";
+            font-style: normal;
+            font-weight: 400;
+            src: local("Cascadia Code"),
+                url(/cascadia.woff) format("woff");
+        }
+
+        * {
+            font-family: "Cascadia Code", Arial, Helvetica, sans-serif !important;
+        }
+
+        h1 {
+            font-size: 5rem;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            color: rgb(106, 255, 235) !important;
+        }
+
+        h1::before {
+            content: '.';
+            color: grey;
+        }
+
+        ul {
+            list-style-type: none;
+        }
+    </style>
+    <style>
+        /* mobile compatibilty */
+        @media (max-width: 600px) {
+            div.popup {
+                position: fixed;
+                box-shadow: none;
+                top: 0;
+                left: 0;
+                margin: 0;
+                width: 150%;
+                height: 120%;
+                padding-left: 10%;
+                padding-right: 10%;
+                border-radius: 0;
+                display: block;
+            }
+
+            div.website {
+                box-shadow: none;
+                border: none;
+                border-radius: 0;
+                border-top: 1px solid rgb(255, 255, 255);
+                border-bottom: 1px solid rgb(255, 255, 255);
+                margin: 0;
+                margin-top: 1rem;
+            }
+        }
+    </style>
+</body>
+
+</html>
