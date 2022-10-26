@@ -1,0 +1,6 @@
+echo Cloning repository...
+git clone https://github.com/MinecraftPublisher/dotrun.git
+echo Installing dependencies...
+cd dotrun
+npm i
+npm start
